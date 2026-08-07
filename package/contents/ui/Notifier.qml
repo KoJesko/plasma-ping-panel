@@ -15,7 +15,7 @@ Item {
         id: note
         componentName: "plasma_workspace"
         eventId: "notification"
-        iconName: "discord-pings"
+        iconName: "ping-panel"
         flags: Notification.DefaultEvent
         // defaultAction is a NotificationAction object, not a string.
         defaultAction: NotificationAction {

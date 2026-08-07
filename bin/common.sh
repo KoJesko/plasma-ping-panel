@@ -3,13 +3,22 @@
 # Everything here is $HOME-relative and discovers its own paths, so the repo can
 # be cloned anywhere on any machine and both scripts still work.
 
-APPLET_ID="com.github.kojesko.discordpings"
-# Installs made before 1.0.0 used the org.kde namespace, which is reserved for
-# widgets contributed to KDE itself. Kept only so upgrades can clean it up.
-LEGACY_APPLET_ID="org.kde.plasma.discordpings"
+APPLET_ID="com.github.kojesko.pingpanel"
+# IDs this widget has shipped under before, kept only so upgrades can clean them
+# up. The ID doubles as the install directory, so a leftover copy shows up as a
+# second entry in the widget list.
+#   org.kde.plasma.discordpings      pre-1.0: org.kde is reserved for KDE's own
+#   com.github.kojesko.discordpings  1.0.0 dev: named after Discord's trademark
+LEGACY_APPLET_IDS=(
+  "org.kde.plasma.discordpings"
+  "com.github.kojesko.discordpings"
+)
 
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+# Deliberately NOT renamed alongside the widget. This is a private data path,
+# not user-facing branding, and moving it would orphan everyone's ping history
+# for no benefit.
 BRIDGE_DIR="$DATA_HOME/discord-pings"
 PLASMOID_DIR="$DATA_HOME/plasma/plasmoids/$APPLET_ID"
 BRIDGE_SRC_REL="package/contents/bridge/PingBridge.plugin.js"

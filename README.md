@@ -1,4 +1,4 @@
-# Discord Pings — Plasma 6 widget
+# Ping Panel — Plasma 6 widget
 
 Browse your Discord mentions from the panel, by keyboard. `Meta+Shift+D` opens
 the list, `j`/`k` moves, `Enter` jumps straight to that message in Discord.
@@ -68,7 +68,7 @@ when the client comes back.
 ### From the KDE Store (easiest)
 
 Right-click your panel → **Add Widgets** → **Get New Widgets** → **Download New
-Plasma Widgets** → search *Discord Pings* → Install. Then add it to the panel.
+Plasma Widgets** → search *Ping Panel* → Install. Then add it to the panel.
 
 The store only ships the widget, so the first time you open it, it will offer an
 **Install bridge plugin** button — that copies the bundled `PingBridge` into
@@ -78,11 +78,11 @@ BetterDiscord for you. After that:
 
 ### From a release file
 
-Download `discordpings-<version>.tar.gz` from
-[Releases](https://github.com/KoJesko/plasma-discord-pings/releases), then:
+Download `pingpanel-<version>.tar.gz` from
+[Releases](https://github.com/KoJesko/plasma-ping-panel/releases), then:
 
 ```bash
-kpackagetool6 --type Plasma/Applet --install discordpings-1.0.0.tar.gz
+kpackagetool6 --type Plasma/Applet --install pingpanel-1.0.0.tar.gz
 ```
 
 Same first-run flow as the store — press **Install bridge plugin** in the popup.
@@ -90,8 +90,8 @@ Same first-run flow as the store — press **Install bridge plugin** in the popu
 ### From source
 
 ```bash
-git clone https://github.com/KoJesko/plasma-discord-pings
-cd plasma-discord-pings
+git clone https://github.com/KoJesko/plasma-ping-panel
+cd plasma-ping-panel
 ./install.sh              # or ./install.sh --link to develop against the repo
 ```
 
@@ -102,7 +102,7 @@ put the repo wherever you like.
 Then:
 
 1. Discord → Settings → BetterDiscord → Plugins → enable **PingBridge**
-2. Right-click the panel → Add Widgets → **Discord Pings**
+2. Right-click the panel → Add Widgets → **Ping Panel**
 3. Press `Meta+Shift+D`
 
 `./install.sh --uninstall` reverses all of it and leaves your ping history alone.
@@ -233,18 +233,29 @@ and in Discord's console (`Ctrl+Shift+I`).
 x-scheme-handler/discord` returns `discord.desktop`.
 
 **The widget vanished after upgrading to 1.0.0** — the applet ID changed (see
-below). Re-add it: right-click the panel → Add Widgets → Discord Pings.
+below). Re-add it: right-click the panel → Add Widgets → Ping Panel.
 
-### The applet ID changed in 1.0.0
+### The name and applet ID changed before 1.0.0 shipped
 
-Before 1.0.0 this used `org.kde.plasma.discordpings`. That namespace is reserved
-for widgets shipped by KDE itself, and the ID doubles as the install directory,
-so publishing under it would collide with KDE's own packages. It's now
-`com.github.kojesko.discordpings`.
+The widget was called *Discord Pings* during development, under two earlier IDs.
+Both were wrong to publish:
 
-`install.sh` removes the old copy automatically. Because Plasma tracks panel
-contents by ID, your old panel instance disappears with it and has to be
-re-added once. Settings and shortcut are re-applied on first run.
+| Was | Why it changed |
+|---|---|
+| `org.kde.plasma.discordpings` | `org.kde` is reserved for widgets KDE itself ships, and the ID doubles as the install directory — so it would collide with KDE's own packages |
+| `com.github.kojesko.discordpings` | Discord's brand guidelines forbid putting their mark in a product name, and store.kde.org makes the uploader warrant no trademark infringement |
+
+It's now **Ping Panel**, `com.github.kojesko.pingpanel`, with a generic `@` icon
+instead of the Discord-logo-derived one it started with.
+
+`install.sh` removes copies under either old ID automatically, and `dpings
+doctor` flags any it finds. Because Plasma tracks panel contents by ID, an old
+panel instance disappears along with it and has to be re-added once — settings
+and the shortcut are re-applied on first run.
+
+The bridge's data directory is still `~/.local/share/discord-pings`. That's a
+private path rather than user-facing branding, and renaming it would orphan
+existing ping history for no benefit.
 
 ### When Discord updates and BetterDiscord disappears
 

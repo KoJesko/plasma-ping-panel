@@ -27,7 +27,7 @@ MouseArea {
     Kirigami.Icon {
         id: icon
         anchors.fill: parent
-        source: "discord-pings"
+        source: "ping-panel"
         active: compact.containsMouse
         // Dim when the bridge isn't reporting, so a dead bridge looks different
         // from "you have no pings".

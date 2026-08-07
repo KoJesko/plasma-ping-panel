@@ -2,8 +2,8 @@
  * @name PingBridge
  * @author kojesko
  * @version 1.0.0
- * @description Mirrors your mentions to ~/.local/share/discord-pings/ so the Plasma "Discord Pings" widget can browse them from the panel.
- * @source https://github.com/KoJesko/plasma-discord-pings
+ * @description Mirrors your mentions to ~/.local/share/discord-pings/ so the Plasma "Ping Panel" widget can browse them from the panel. Not affiliated with Discord Inc.
+ * @source https://github.com/KoJesko/plasma-ping-panel
  */
 
 /*

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install both halves of Discord Pings: the Plasma applet and the BetterDiscord
+# Install both halves of Ping Panel: the Plasma applet and the BetterDiscord
 # bridge plugin. Safe to re-run.
 #
 #   ./install.sh            normal install
@@ -50,18 +50,21 @@ EOF
   exit 0
 fi
 
-# --- migrate pre-1.0 installs ------------------------------------------------
-# Versions before 1.0.0 used org.kde.plasma.discordpings. That namespace is
-# reserved for widgets shipped by KDE itself, so the ID changed — and because
-# the ID *is* the install directory, the old copy has to go or both show up in
-# the widget list.
-LEGACY_DIR="$DATA_HOME/plasma/plasmoids/$LEGACY_APPLET_ID"
-if [[ -e "$LEGACY_DIR" ]]; then
-  say "Removing pre-1.0 install ($LEGACY_APPLET_ID)"
+# --- migrate installs made under an older ID ---------------------------------
+# The ID *is* the install directory, so an old copy left behind shows up as a
+# second, broken entry in the widget list. See LEGACY_APPLET_IDS in common.sh
+# for why each one changed.
+for legacy in "${LEGACY_APPLET_IDS[@]}"; do
+  LEGACY_DIR="$DATA_HOME/plasma/plasmoids/$legacy"
+  # -e follows symlinks, so it is FALSE for a dangling one. A --link install
+  # whose repo has since moved leaves exactly that, and testing -e alone would
+  # silently skip it — hence -L as well.
+  [[ -e "$LEGACY_DIR" || -L "$LEGACY_DIR" ]] || continue
+  say "Removing older install ($legacy)"
   rm -rf "$LEGACY_DIR"
-  kpackagetool6 --type Plasma/Applet --remove "$LEGACY_APPLET_ID" >/dev/null 2>&1 || true
+  kpackagetool6 --type Plasma/Applet --remove "$legacy" >/dev/null 2>&1 || true
   MIGRATED=1
-fi
+done
 
 # --- plasma applet -----------------------------------------------------------
 command -v kpackagetool6 >/dev/null 2>&1 || die "kpackagetool6 not found — this needs Plasma 6."
@@ -114,7 +117,7 @@ if (( BD_FOUND )); then
 Done.
 
   1. Discord -> Settings -> BetterDiscord -> Plugins -> enable "PingBridge"
-  2. Right-click your panel -> Add Widgets -> "Discord Pings"
+  2. Right-click your panel -> Add Widgets -> "Ping Panel"
   3. Press Meta+Shift+D
 EOF
 else
@@ -124,14 +127,14 @@ Applet installed. BetterDiscord was not found, so the bridge was skipped.
   1. Install BetterDiscord:  https://betterdiscord.app
   2. Re-run ./install.sh (or press "Install bridge plugin" in the widget)
   3. Discord -> Settings -> BetterDiscord -> Plugins -> enable "PingBridge"
-  4. Right-click your panel -> Add Widgets -> "Discord Pings"
+  4. Right-click your panel -> Add Widgets -> "Ping Panel"
 EOF
 fi
 
 if [[ -n "${MIGRATED:-}" ]]; then
   echo
   warn "The widget ID changed in 1.0.0, so your old panel instance is gone."
-  warn "Re-add it: right-click the panel -> Add Widgets -> Discord Pings."
+  warn "Re-add it: right-click the panel -> Add Widgets -> Ping Panel."
 fi
 
 echo

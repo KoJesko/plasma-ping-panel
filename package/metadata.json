@@ -7,16 +7,16 @@
                 "Email": "jansherremway@gmail.com"
             }
         ],
-        "BugReportUrl": "https://github.com/KoJesko/plasma-discord-pings/issues",
+        "BugReportUrl": "https://github.com/KoJesko/plasma-ping-panel/issues",
         "Category": "Online Services",
-        "Description": "Browse your Discord mentions from the panel with the keyboard. Meta+Shift+D opens the list, j/k navigates, Enter jumps to the message in Discord.",
+        "Description": "Browse your Discord mentions from the panel with the keyboard. Meta+Shift+D opens the list, j/k navigates, Enter jumps to the message. Not affiliated with Discord Inc.",
         "EnabledByDefault": true,
-        "Icon": "discord-pings",
-        "Id": "com.github.kojesko.discordpings",
+        "Icon": "ping-panel",
+        "Id": "com.github.kojesko.pingpanel",
         "License": "GPL-3.0-or-later",
-        "Name": "Discord Pings",
+        "Name": "Ping Panel",
         "Version": "1.0.0",
-        "Website": "https://github.com/KoJesko/plasma-discord-pings"
+        "Website": "https://github.com/KoJesko/plasma-ping-panel"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "X-Plasma-Provides": []

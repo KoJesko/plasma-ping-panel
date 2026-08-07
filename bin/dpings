@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Discord Pings helper. Runs from anywhere on any machine.
+# Ping Panel helper. Runs from anywhere on any machine.
 set -euo pipefail
 
 # Resolve the repo from this script's own location rather than a hardcoded
@@ -9,7 +9,7 @@ SELF="$(readlink -f -- "${BASH_SOURCE[0]}")"
 REPO="${DPINGS_REPO:-$(dirname -- "$(dirname -- "$SELF")")}"
 
 [[ -f "$REPO/package/metadata.json" ]] || {
-  echo "dpings: $REPO does not look like the plasma-discord-pings repo" >&2
+  echo "dpings: $REPO does not look like the plasma-ping-panel repo" >&2
   echo "        (set DPINGS_REPO if you moved it)" >&2
   exit 1
 }
@@ -32,7 +32,7 @@ usage: dpings <command>
   sort      print the current ordering produced by scorePing()
   reload    restart plasmashell to pick up QML changes
   edit      open PingModel.js (where scorePing lives) in \$EDITOR
-  package   build the .plasmoid tarball for the KDE Store
+  package   build the store archive (.tar.gz)
 EOF
 }
 
@@ -125,10 +125,12 @@ case "${1:-}" in
     else
       bad "not installed"; note "run ./install.sh"
     fi
-    if [[ -e "$DATA_HOME/plasma/plasmoids/$LEGACY_APPLET_ID" ]]; then
-      bad "stale pre-1.0 copy at $LEGACY_APPLET_ID"
+    for legacy in "${LEGACY_APPLET_IDS[@]}"; do
+      # -L too: a dangling dev symlink is invisible to -e alone.
+      [[ -e "$DATA_HOME/plasma/plasmoids/$legacy" || -L "$DATA_HOME/plasma/plasmoids/$legacy" ]] || continue
+      bad "stale copy under the old ID $legacy"
       note "run ./install.sh to migrate, then re-add the widget to your panel"
-    fi
+    done
 
     echo "betterdiscord"
     if bd_plugin_dirs >/dev/null; then

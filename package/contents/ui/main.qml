@@ -65,7 +65,7 @@ PlasmoidItem {
         return PlasmaCore.Types.PassiveStatus;
     }
 
-    toolTipMainText: i18n("Discord Pings")
+    toolTipMainText: i18n("Ping Panel")
     toolTipSubText: {
         if (bridgeError) return bridgeError;
         if (!bridgeUp) return i18n("Bridge offline — is Discord running with the PingBridge plugin enabled?");

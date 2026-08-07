@@ -24,7 +24,7 @@ command -v jq >/dev/null 2>&1 \
 [[ -n "$VERSION" ]] || die "could not read Version from package/metadata.json"
 
 OUT_DIR="$REPO/dist"
-OUT="$OUT_DIR/discordpings-$VERSION.tar.gz"
+OUT="$OUT_DIR/pingpanel-$VERSION.tar.gz"
 mkdir -p "$OUT_DIR"
 rm -f "$OUT"
 
