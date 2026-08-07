@@ -1,45 +1,87 @@
 #!/usr/bin/env bash
-# Install both halves of Discord Pings: the BetterDiscord bridge plugin and the
-# Plasma applet. Safe to re-run; use --link during development so edits in this
-# repo take effect without reinstalling.
+# Install both halves of Discord Pings: the Plasma applet and the BetterDiscord
+# bridge plugin. Safe to re-run.
+#
+#   ./install.sh            normal install
+#   ./install.sh --link     develop against the repo (applet is symlinked)
+#   ./install.sh --uninstall
 set -euo pipefail
 
 REPO="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-APPLET_ID="org.kde.plasma.discordpings"
-BRIDGE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/discord-pings"
-PLASMOID_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/plasma/plasmoids/$APPLET_ID"
+# shellcheck source=bin/common.sh
+source "$REPO/bin/common.sh"
 
 LINK=0
-[[ "${1:-}" == "--link" ]] && LINK=1
+UNINSTALL=0
+case "${1:-}" in
+  --link)      LINK=1 ;;
+  --uninstall) UNINSTALL=1 ;;
+  "")          ;;
+  *)           die "unknown option '$1' (expected --link or --uninstall)" ;;
+esac
 
-say() { printf '\033[1;34m::\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
-die() { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
+restart_plasmashell() {
+  if command -v kquitapp6 >/dev/null 2>&1 && pgrep -x plasmashell >/dev/null; then
+    say "Restarting plasmashell"
+    kquitapp6 plasmashell >/dev/null 2>&1 || true
+    sleep 2
+    (setsid plasmashell >/dev/null 2>&1 &)
+  else
+    warn "plasmashell not running; skipping restart"
+  fi
+}
 
-# --- locate BetterDiscord ----------------------------------------------------
-# Checked in preference order; the first existing one wins.
-BD_CANDIDATES=(
-  "$HOME/.config/BetterDiscord/plugins"
-  "$HOME/.var/app/com.discordapp.Discord/config/BetterDiscord/plugins"
-  "${XDG_CONFIG_HOME:-$HOME/.config}/BetterDiscord/plugins"
-)
-BD_PLUGINS=""
-for candidate in "${BD_CANDIDATES[@]}"; do
-  [[ -d "$candidate" ]] && { BD_PLUGINS="$candidate"; break; }
-done
-[[ -n "$BD_PLUGINS" ]] || die "Could not find a BetterDiscord plugins folder. Install BetterDiscord first."
+# --- uninstall ---------------------------------------------------------------
+if (( UNINSTALL )); then
+  say "Removing applet"
+  rm -rf "$PLASMOID_DIR"
+  kpackagetool6 --type Plasma/Applet --remove "$APPLET_ID" >/dev/null 2>&1 || true
+  while read -r bd; do
+    rm -f "$bd/PingBridge.plugin.js" && say "Removed $bd/PingBridge.plugin.js"
+  done < <(bd_plugin_dirs || true)
+  rm -f "$HOME/.local/bin/dpings"
+  restart_plasmashell
+  cat <<EOF
 
-# --- bridge plugin -----------------------------------------------------------
-say "Installing PingBridge into $BD_PLUGINS"
-mkdir -p "$BRIDGE_DIR/commands"
-# Always a real copy, never a symlink even under --link: BetterDiscord's addon
-# scanner does not reliably pick up symlinked plugin files. Use `dpings sync`
-# to push repo edits across.
-install -m 0644 "$REPO/betterdiscord/PingBridge.plugin.js" "$BD_PLUGINS/PingBridge.plugin.js"
+Uninstalled. Your ping history is left alone at:
+  $BRIDGE_DIR
+Delete it yourself if you want it gone.
+EOF
+  exit 0
+fi
+
+# --- migrate pre-1.0 installs ------------------------------------------------
+# Versions before 1.0.0 used org.kde.plasma.discordpings. That namespace is
+# reserved for widgets shipped by KDE itself, so the ID changed — and because
+# the ID *is* the install directory, the old copy has to go or both show up in
+# the widget list.
+LEGACY_DIR="$DATA_HOME/plasma/plasmoids/$LEGACY_APPLET_ID"
+if [[ -e "$LEGACY_DIR" ]]; then
+  say "Removing pre-1.0 install ($LEGACY_APPLET_ID)"
+  rm -rf "$LEGACY_DIR"
+  kpackagetool6 --type Plasma/Applet --remove "$LEGACY_APPLET_ID" >/dev/null 2>&1 || true
+  MIGRATED=1
+fi
+
+# --- plasma applet -----------------------------------------------------------
+command -v kpackagetool6 >/dev/null 2>&1 || die "kpackagetool6 not found — this needs Plasma 6."
+
+if (( LINK )); then
+  say "Linking applet into $PLASMOID_DIR"
+  mkdir -p "$(dirname "$PLASMOID_DIR")"
+  rm -rf "$PLASMOID_DIR"
+  ln -sfn "$REPO/package" "$PLASMOID_DIR"
+elif kpackagetool6 --type Plasma/Applet --list 2>/dev/null | grep -qx "$APPLET_ID"; then
+  say "Upgrading applet $APPLET_ID"
+  kpackagetool6 --type Plasma/Applet --upgrade "$REPO/package"
+else
+  say "Installing applet $APPLET_ID"
+  kpackagetool6 --type Plasma/Applet --install "$REPO/package"
+fi
 
 # --- helper command ----------------------------------------------------------
-# Always a symlink: `dpings` resolves the repo at runtime, so linking keeps it
-# correct even when the repo moves.
+# Always a symlink: dpings resolves the repo from its own path at runtime, so a
+# link keeps working even if the repo moves.
 BIN_DIR="$HOME/.local/bin"
 say "Linking dpings into $BIN_DIR"
 mkdir -p "$BIN_DIR"
@@ -49,40 +91,49 @@ case ":$PATH:" in
   *) warn "$BIN_DIR is not on PATH; add it to use \`dpings\`" ;;
 esac
 
-# --- plasma applet -----------------------------------------------------------
-if (( LINK )); then
-  say "Linking applet into $PLASMOID_DIR"
-  mkdir -p "$(dirname "$PLASMOID_DIR")"
-  rm -rf "$PLASMOID_DIR"
-  ln -sfn "$REPO/package" "$PLASMOID_DIR"
-else
-  if kpackagetool6 --type Plasma/Applet --list 2>/dev/null | grep -qx "$APPLET_ID"; then
-    say "Upgrading applet $APPLET_ID"
-    kpackagetool6 --type Plasma/Applet --upgrade "$REPO/package"
-  else
-    say "Installing applet $APPLET_ID"
-    kpackagetool6 --type Plasma/Applet --install "$REPO/package"
-  fi
-fi
+# --- bridge plugin -----------------------------------------------------------
+# Missing BetterDiscord is not fatal. The applet is useful to install now and
+# the widget itself can install the bridge later, once BetterDiscord exists.
+mkdir -p "$BRIDGE_DIR/commands"
+BD_FOUND=0
+while read -r bd; do
+  # Always a real copy, never a symlink even under --link: BetterDiscord's
+  # addon scanner does not reliably pick up symlinked plugin files. Use
+  # `dpings sync` to push repo edits across.
+  install -m 0644 "$REPO/$BRIDGE_SRC_REL" "$bd/PingBridge.plugin.js"
+  say "Installed PingBridge into $bd"
+  BD_FOUND=1
+done < <(bd_plugin_dirs || true)
 
-# --- reload ------------------------------------------------------------------
-if command -v kquitapp6 >/dev/null 2>&1 && pgrep -x plasmashell >/dev/null; then
-  say "Restarting plasmashell"
-  kquitapp6 plasmashell >/dev/null 2>&1 || true
-  sleep 2
-  (setsid plasmashell >/dev/null 2>&1 &)
-else
-  warn "plasmashell not running; skipping restart"
-fi
+restart_plasmashell
 
-cat <<EOF
-
+# --- what's left to do -------------------------------------------------------
+echo
+if (( BD_FOUND )); then
+  cat <<EOF
 Done.
 
-Next steps:
-  1. In Discord: Settings -> BetterDiscord -> Plugins -> enable "PingBridge".
-  2. Right-click your panel -> Add Widgets -> "Discord Pings".
-  3. Press Meta+Shift+D to open it. Rebind under widget settings -> Shortcuts.
-
-Bridge state lives in: $BRIDGE_DIR/pings.json
+  1. Discord -> Settings -> BetterDiscord -> Plugins -> enable "PingBridge"
+  2. Right-click your panel -> Add Widgets -> "Discord Pings"
+  3. Press Meta+Shift+D
 EOF
+else
+  cat <<EOF
+Applet installed. BetterDiscord was not found, so the bridge was skipped.
+
+  1. Install BetterDiscord:  https://betterdiscord.app
+  2. Re-run ./install.sh (or press "Install bridge plugin" in the widget)
+  3. Discord -> Settings -> BetterDiscord -> Plugins -> enable "PingBridge"
+  4. Right-click your panel -> Add Widgets -> "Discord Pings"
+EOF
+fi
+
+if [[ -n "${MIGRATED:-}" ]]; then
+  echo
+  warn "The widget ID changed in 1.0.0, so your old panel instance is gone."
+  warn "Re-add it: right-click the panel -> Add Widgets -> Discord Pings."
+fi
+
+echo
+echo "Bridge state lives in: $BRIDGE_DIR/pings.json"
+echo "Run \`dpings doctor\` if anything looks wrong."

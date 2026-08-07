@@ -1,20 +1,30 @@
 #!/usr/bin/env bash
-# Discord Pings widget helper. Runs from anywhere; resolves the repo itself.
+# Discord Pings helper. Runs from anywhere on any machine.
 set -euo pipefail
 
-REPO="${DPINGS_REPO:-$HOME/GitHub/plasma-discord-pings}"
-BRIDGE_DIR="$HOME/.local/share/discord-pings"
+# Resolve the repo from this script's own location rather than a hardcoded
+# path. `readlink -f` follows the ~/.local/bin symlink install.sh creates, so
+# the repo can be cloned anywhere and moved afterwards without breaking this.
+SELF="$(readlink -f -- "${BASH_SOURCE[0]}")"
+REPO="${DPINGS_REPO:-$(dirname -- "$(dirname -- "$SELF")")}"
 
-[[ -d "$REPO" ]] || { echo "dpings: repo not found at $REPO (set DPINGS_REPO)" >&2; exit 1; }
+[[ -f "$REPO/package/metadata.json" ]] || {
+  echo "dpings: $REPO does not look like the plasma-discord-pings repo" >&2
+  echo "        (set DPINGS_REPO if you moved it)" >&2
+  exit 1
+}
+# shellcheck source=common.sh
+source "$REPO/bin/common.sh"
 
 usage() {
   cat <<EOF
 usage: dpings <command>
 
+  status    show bridge state: up/down, ping count, last update
+  doctor    check every part of the install and say what is broken
   clear     empty the ping list (do this before enabling PingBridge for real)
   mock      write fake pings so the widget can be tested with Discord closed
   watch     write fake pings, then print every command the widget sends
-  status    show bridge state: up/down, ping count, last update
   sync      copy the bridge plugin from the repo into BetterDiscord's folder
   inject    (re)inject BetterDiscord into Discord's core module
   uninject  undo that, restoring Discord's original index.js
@@ -22,6 +32,7 @@ usage: dpings <command>
   sort      print the current ordering produced by scorePing()
   reload    restart plasmashell to pick up QML changes
   edit      open PingModel.js (where scorePing lives) in \$EDITOR
+  package   build the .plasmoid tarball for the KDE Store
 EOF
 }
 
@@ -31,32 +42,32 @@ case "${1:-}" in
   watch)  node "$REPO/tools/mock-bridge.mjs" ;;
   test)   node "$REPO/tests/model-test.mjs" && node "$REPO/tests/bridge-test.mjs" ;;
   sort)   node "$REPO/tests/model-test.mjs" | sed -n '/current ordering/,$p' ;;
+  package) "$REPO/tools/package.sh" ;;
+  edit)   "${EDITOR:-nano}" "$REPO/package/contents/ui/PingModel.js" ;;
   reload)
     kquitapp6 plasmashell >/dev/null 2>&1 || true
     sleep 2
     (setsid plasmashell >/dev/null 2>&1 &)
     echo "plasmashell restarted"
     ;;
-  edit)   "${EDITOR:-nano}" "$REPO/package/contents/ui/PingModel.js" ;;
 
   sync)
     # A real copy, not a symlink — BD's addon scanner is unreliable with links.
-    for bd in "$HOME/.config/BetterDiscord/plugins" \
-              "$HOME/.var/app/com.discordapp.Discord/config/BetterDiscord/plugins"; do
-      [[ -d "$bd" ]] || continue
-      install -m 0644 "$REPO/betterdiscord/PingBridge.plugin.js" "$bd/PingBridge.plugin.js"
+    n=0
+    while read -r bd; do
+      install -m 0644 "$REPO/$BRIDGE_SRC_REL" "$bd/PingBridge.plugin.js"
       echo "synced -> $bd/PingBridge.plugin.js"
-    done
+      n=$((n + 1))
+    done < <(bd_plugin_dirs)
+    (( n )) || die "no BetterDiscord plugins folder found — is BetterDiscord installed?"
     echo "BetterDiscord hot-reloads plugins; no Discord restart needed"
     ;;
 
   inject|uninject)
-    # betterdiscordctl hardcodes `discord_desktop_core-1`; Discord ships -2 and
-    # will ship -3 eventually, so glob the suffix instead of assuming it.
-    # Every Discord update overwrites index.js and undoes the injection.
-    asar="$HOME/.config/BetterDiscord/data/betterdiscord.asar"
-    mapfile -t cores < <(ls -d "$HOME"/.config/discord/app-*/modules/discord_desktop_core-*/discord_desktop_core 2>/dev/null | sort -V)
-    [[ ${#cores[@]} -gt 0 ]] || { echo "dpings: no discord_desktop_core found — is Discord installed?" >&2; exit 1; }
+    # Discord overwrites index.js on every update, undoing the injection.
+    asar="$CONFIG_HOME/BetterDiscord/data/betterdiscord.asar"
+    mapfile -t cores < <(discord_core_dirs)
+    (( ${#cores[@]} )) || die "no discord_desktop_core found — is Discord installed?"
     core="${cores[-1]}"                      # newest app version wins
     idx="$core/index.js"
     if [[ "$1" == "uninject" ]]; then
@@ -67,7 +78,7 @@ case "${1:-}" in
         echo "no backup found; wrote Discord's default line to $idx"
       fi
     else
-      [[ -f "$asar" ]] || { echo "dpings: $asar missing — install BetterDiscord first" >&2; exit 1; }
+      [[ -f "$asar" ]] || die "$asar missing — install BetterDiscord first"
       if grep -q betterdiscord "$idx" 2>/dev/null; then
         echo "already injected: $idx"
       else
@@ -78,9 +89,10 @@ case "${1:-}" in
     fi
     echo "restart Discord completely (tray icon -> Quit) for this to take effect"
     ;;
+
   status)
     f="$BRIDGE_DIR/pings.json"
-    if [[ ! -f "$f" ]]; then echo "no state file at $f (bridge has never run)"; exit 0; fi
+    [[ -f "$f" ]] || { echo "no state file at $f (bridge has never run)"; exit 0; }
     node -e '
       const fs = require("fs");
       const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -96,6 +108,69 @@ case "${1:-}" in
       if (n) console.log("kinds:   " + Object.entries(byKind).map(([k, v]) => `${k}=${v}`).join(" "));
     ' "$f"
     ;;
+
+  doctor)
+    # Walks the chain in dependency order, so the first FAIL is the real cause.
+    rc=0
+    ok()   { printf '  \033[1;32mok\033[0m   %s\n' "$*"; }
+    bad()  { printf '  \033[1;31mFAIL\033[0m %s\n' "$*"; rc=1; }
+    note() { printf '       %s\n' "$*"; }
+
+    echo "repo"
+    ok "$REPO"
+
+    echo "plasma applet"
+    if [[ -e "$PLASMOID_DIR" ]]; then
+      ok "installed at $PLASMOID_DIR$([[ -L "$PLASMOID_DIR" ]] && echo ' (dev symlink)')"
+    else
+      bad "not installed"; note "run ./install.sh"
+    fi
+    if [[ -e "$DATA_HOME/plasma/plasmoids/$LEGACY_APPLET_ID" ]]; then
+      bad "stale pre-1.0 copy at $LEGACY_APPLET_ID"
+      note "run ./install.sh to migrate, then re-add the widget to your panel"
+    fi
+
+    echo "betterdiscord"
+    if bd_plugin_dirs >/dev/null; then
+      while read -r bd; do
+        if [[ -f "$bd/PingBridge.plugin.js" ]]; then ok "bridge present in $bd"
+        else bad "bridge missing from $bd"; note "run dpings sync"; fi
+      done < <(bd_plugin_dirs)
+    else
+      bad "no BetterDiscord plugins folder"
+      note "install BetterDiscord: https://betterdiscord.app"
+    fi
+
+    echo "discord injection"
+    mapfile -t cores < <(discord_core_dirs)
+    if (( ${#cores[@]} )); then
+      if grep -q betterdiscord "${cores[-1]}/index.js" 2>/dev/null; then
+        ok "injected into ${cores[-1]}"
+      else
+        bad "not injected (Discord updates undo this)"; note "run dpings inject, then fully quit and relaunch Discord"
+      fi
+    else
+      bad "no discord_desktop_core found"; note "is the Discord desktop app installed?"
+    fi
+
+    echo "bridge state"
+    if [[ -f "$BRIDGE_DIR/pings.json" ]]; then
+      ok "$BRIDGE_DIR/pings.json"
+      "$SELF" status | sed 's/^/       /'
+    else
+      bad "no state file yet"; note "enable PingBridge in Discord: Settings -> BetterDiscord -> Plugins"
+    fi
+
+    echo "url handler"
+    if [[ "$(xdg-mime query default x-scheme-handler/discord 2>/dev/null)" == *discord* ]]; then
+      ok "discord:// opens the Discord app"
+    else
+      bad "discord:// is not registered"; note "Enter will fall back to the browser"
+    fi
+
+    exit $rc
+    ;;
+
   ""|-h|--help|help) usage ;;
   *) echo "dpings: unknown command '${1}'" >&2; usage; exit 1 ;;
 esac

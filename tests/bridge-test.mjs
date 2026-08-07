@@ -41,7 +41,7 @@ globalThis.BdApi = {
 };
 
 const require = createRequire(import.meta.url);
-const PingBridge = require("../betterdiscord/PingBridge.plugin.js");
+const PingBridge = require("../package/contents/bridge/PingBridge.plugin.js");
 
 const bridge = new PingBridge({ name: "PingBridge" });
 bridge.modules = {
@@ -93,7 +93,7 @@ function codeOf(relative) {
 
 console.log("\nbetterdiscord require compatibility");
 check("only requires modules BetterDiscord's shim supports", () => {
-    const src = codeOf("../betterdiscord/PingBridge.plugin.js");
+    const src = codeOf("../package/contents/bridge/PingBridge.plugin.js");
     const used = new Set();
     for (const m of src.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) used.add(m[1]);
     const bad = [...used].filter(n => !n.startsWith("./") && !BD_MODULES.has(n));
@@ -101,7 +101,7 @@ check("only requires modules BetterDiscord's shim supports", () => {
         `unsupported require(): ${bad.join(", ")} — BD resolves these as file paths and throws ENOENT at load`);
 });
 check("does not call os.homedir (no os module in BD)", () => {
-    assert.equal(/\bos\s*\.\s*homedir\s*\(/.exec(codeOf("../betterdiscord/PingBridge.plugin.js")), null,
+    assert.equal(/\bos\s*\.\s*homedir\s*\(/.exec(codeOf("../package/contents/bridge/PingBridge.plugin.js")), null,
         "os.homedir() is unavailable; use process.env.HOME");
 });
 

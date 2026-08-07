@@ -22,6 +22,21 @@ PlasmoidItem {
 
     readonly property string bridgeDir: Plasmoid.configuration.bridgeDir || "$HOME/.local/share/discord-pings"
 
+    // ---------------------------------------------------------- bridge setup
+    // Installing from the KDE Store delivers this package and nothing else —
+    // no install.sh, no dpings — so the widget has to be able to put its own
+    // bridge plugin into BetterDiscord. contents/bridge/ ships both the plugin
+    // and the script that installs it.
+    //
+    // Qt.resolvedUrl() is relative to this QML file, so it finds them whether
+    // the package was installed by kpackagetool6 or symlinked from a checkout.
+    readonly property string setupScript:
+        String(Qt.resolvedUrl("../bridge/setup.sh")).replace(/^file:\/\//, "")
+
+    property string bdDir: ""                   // BetterDiscord plugins folder
+    property string bridgeSetup: "unknown"      // see PingModel.parseProbe
+    property string setupError: ""
+
     // Rebuilt whenever data or any filter changes.
     function rebuild() {
         const cfg = {
@@ -73,9 +88,20 @@ PlasmoidItem {
         id: shell
         engine: "executable"
         connectedSources: []
+        // Results come back keyed by the exact command string that produced
+        // them, which is why each operation below is a stable readonly property
+        // rather than a string built at call time.
         onNewData: function (source, data) {
             disconnectSource(source);
-            if (source === root.readCommand) root.applyState(data["stdout"] || "");
+            if (source === root.readCommand) {
+                root.applyState(data["stdout"] || "");
+            } else if (source === root.probeCommand) {
+                root.applyProbe(data["stdout"] || "");
+            } else if (source === root.installBridgeCommand) {
+                root.setupError = (data["exit code"] || 0) === 0
+                    ? "" : (String(data["stderr"] || "").trim() || i18n("Could not install the bridge plugin."));
+                root.probeBridge();
+            }
         }
         function exec(cmd) {
             connectSource(cmd);
@@ -88,10 +114,28 @@ PlasmoidItem {
 
     readonly property string readCommand:
         "sh -c " + shQuote('cat -- "' + bridgeDir + '/pings.json" 2>/dev/null')
+    readonly property string probeCommand:
+        "sh " + shQuote(setupScript) + " probe"
+    readonly property string installBridgeCommand:
+        "sh " + shQuote(setupScript) + " install"
 
     function reload() {
         now = Date.now();
         shell.exec(readCommand);
+    }
+
+    function probeBridge() { shell.exec(probeCommand); }
+
+    function applyProbe(text) {
+        const probe = PingModel.parseProbe(text);
+        bdDir = probe.bdDir;
+        bridgeSetup = probe.state;
+    }
+
+    /** Copy the bundled bridge into BetterDiscord, then re-probe to confirm. */
+    function installBridge() {
+        setupError = "";
+        shell.exec(installBridgeCommand);
     }
 
     function applyState(text) {
@@ -127,10 +171,11 @@ PlasmoidItem {
         shell.exec("sh -c " + shQuote(script));
     }
 
+    function openUrl(url) { shell.exec("xdg-open " + shQuote(url)); }
+
     function openPing(ping) {
         if (!ping) return;
-        const url = PingModel.deepLink(ping, Plasmoid.configuration.openTarget);
-        shell.exec("xdg-open " + shQuote(url));
+        openUrl(PingModel.deepLink(ping, Plasmoid.configuration.openTarget));
         if (Plasmoid.configuration.markReadOnOpen) markRead(ping);
         if (Plasmoid.configuration.dismissOnOpen) dismiss(ping);
         root.expanded = false;
@@ -222,5 +267,15 @@ PlasmoidItem {
             Plasmoid.configuration.shortcutInitialized = true;
         }
         reload();
+        probeBridge();
     }
+
+    // Re-probe on open, but only while something is unresolved — it's how the
+    // popup notices that BetterDiscord got installed since last time. Once the
+    // bridge is in place this costs nothing, since polling pings.json already
+    // tells us whether it's actually running.
+    // `root.expanded`, not bare `expanded`: inside a change handler QML resolves
+    // the bare name as an injected signal parameter, which is deprecated and
+    // warns at load.
+    onExpandedChanged: if (root.expanded && root.bridgeSetup !== "ok") root.probeBridge()
 }

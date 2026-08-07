@@ -175,23 +175,96 @@ PlasmaExtras.Representation {
                 }
             }
 
+            /*
+             * Empty-list state. This is the entire first-run experience for
+             * anyone who installed from the KDE Store — they have the widget
+             * and nothing else — so it has to name the next concrete step at
+             * every stage, not just say "offline".
+             *
+             * `phase` is evaluated once and the three visual properties read
+             * it, so the message, icon and button can never disagree.
+             */
             PlasmaExtras.PlaceholderMessage {
+                id: placeholder
                 anchors.centerIn: parent
                 width: parent.width - Kirigami.Units.gridUnit * 4
                 visible: list.count === 0
-                iconName: rep.applet && rep.applet.bridgeUp ? "mail-mark-read" : "network-disconnect"
-                text: {
-                    if (rep.applet && rep.applet.bridgeError) return i18n("Bridge error");
-                    if (!rep.applet || !rep.applet.bridgeUp) return i18n("Bridge offline");
-                    if (rep.filterText) return i18n("No matches");
-                    return i18n("No pings");
+
+                readonly property string phase: {
+                    if (!rep.applet) return "offline";
+                    if (rep.applet.setupError) return "setup-failed";
+                    if (rep.applet.bridgeError) return "error";
+                    if (rep.applet.bridgeSetup === "no-betterdiscord") return "no-betterdiscord";
+                    if (rep.applet.bridgeSetup === "not-installed") return "not-installed";
+                    // An outdated plugin still works, so only raise it when
+                    // nothing else is happening — otherwise it would mask the
+                    // more useful "Discord isn't running" message.
+                    if (rep.applet.bridgeSetup === "outdated" && !rep.applet.bridgeUp) return "outdated";
+                    if (!rep.applet.bridgeUp) return "offline";
+                    return rep.filterText ? "no-matches" : "empty";
                 }
+
+                iconName: {
+                    switch (phase) {
+                    case "setup-failed":
+                    case "error": return "dialog-error";
+                    case "no-betterdiscord":
+                    case "not-installed":
+                    case "outdated": return "install";
+                    case "offline": return "network-disconnect";
+                    case "no-matches": return "edit-find";
+                    default: return "mail-mark-read";
+                    }
+                }
+
+                text: {
+                    switch (phase) {
+                    case "setup-failed": return i18n("Setup failed");
+                    case "error": return i18n("Bridge error");
+                    case "no-betterdiscord": return i18n("BetterDiscord is required");
+                    case "not-installed": return i18n("Bridge plugin not installed");
+                    case "outdated": return i18n("Bridge plugin is out of date");
+                    case "offline": return i18n("Bridge offline");
+                    case "no-matches": return i18n("No matches");
+                    default: return i18n("No pings");
+                    }
+                }
+
                 explanation: {
-                    if (rep.applet && rep.applet.bridgeError) return rep.applet.bridgeError;
-                    if (!rep.applet || !rep.applet.bridgeUp)
+                    switch (phase) {
+                    case "setup-failed": return rep.applet.setupError;
+                    case "error": return rep.applet.bridgeError;
+                    case "no-betterdiscord":
+                        return i18n("Discord has no plugin API, so this widget reads your mentions through BetterDiscord. Install it, then reopen this popup.");
+                    case "not-installed":
+                        return i18n("BetterDiscord was found. Install the bridge plugin, then enable “PingBridge” in Discord → Settings → BetterDiscord → Plugins.");
+                    case "outdated":
+                        return i18n("The copy in BetterDiscord is older than the one shipped with this widget.");
+                    case "offline":
                         return i18n("Start Discord and enable the PingBridge plugin in BetterDiscord's settings.");
-                    if (rep.filterText) return i18n("Nothing matches “%1”.", rep.filterText);
-                    return i18n("You're all caught up.");
+                    case "no-matches": return i18n("Nothing matches “%1”.", rep.filterText);
+                    default: return i18n("You're all caught up.");
+                    }
+                }
+
+                helpfulAction: Kirigami.Action {
+                    visible: placeholder.phase === "no-betterdiscord"
+                        || placeholder.phase === "not-installed"
+                        || placeholder.phase === "outdated"
+                        || placeholder.phase === "setup-failed"
+                    icon.name: placeholder.phase === "no-betterdiscord" ? "internet-services" : "install"
+                    text: {
+                        switch (placeholder.phase) {
+                        case "no-betterdiscord": return i18n("Get BetterDiscord");
+                        case "outdated": return i18n("Update bridge plugin");
+                        case "setup-failed": return i18n("Try again");
+                        default: return i18n("Install bridge plugin");
+                        }
+                    }
+                    onTriggered: {
+                        if (placeholder.phase === "no-betterdiscord") rep.applet.openUrl("https://betterdiscord.app");
+                        else rep.applet.installBridge();
+                    }
                 }
             }
         }

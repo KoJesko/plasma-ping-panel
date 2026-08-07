@@ -1,7 +1,7 @@
 /**
  * @name PingBridge
  * @author kojesko
- * @version 0.1.0
+ * @version 1.0.0
  * @description Mirrors your mentions to ~/.local/share/discord-pings/ so the Plasma "Discord Pings" widget can browse them from the panel.
  * @source https://github.com/KoJesko/plasma-discord-pings
  */

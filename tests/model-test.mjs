@@ -85,6 +85,25 @@ check("deepLink uses @me for DMs", () => {
         "discord://-/channels/@me/2/3");
 });
 
+console.log("\nbridge setup probe");
+check("compareVersions orders numerically, not lexically", () => {
+    assert.ok(M.compareVersions("1.10.0", "1.9.0") > 0, "1.10.0 must beat 1.9.0");
+    assert.equal(M.compareVersions("1.0", "1.0.0"), 0, "missing segments are zero");
+    assert.ok(M.compareVersions("0.1.0", "1.0.0") < 0);
+});
+check("no BetterDiscord", () =>
+    assert.equal(M.parseProbe("\n\n1.0.0").state, "no-betterdiscord"));
+check("BetterDiscord present, bridge missing", () =>
+    assert.equal(M.parseProbe("/home/u/.config/BetterDiscord/plugins\n\n1.0.0").state, "not-installed"));
+check("older installed bridge is outdated", () =>
+    assert.equal(M.parseProbe("/bd\n0.1.0\n1.0.0").state, "outdated"));
+check("matching version is ok", () =>
+    assert.equal(M.parseProbe("/bd\n1.0.0\n1.0.0").state, "ok"));
+check("a NEWER installed bridge is left alone, not clobbered", () =>
+    assert.equal(M.parseProbe("/bd\n2.0.0\n1.0.0").state, "ok"));
+check("empty probe output does not throw", () =>
+    assert.equal(M.parseProbe("").state, "no-betterdiscord"));
+
 // --- the part you actually care about ---------------------------------------
 console.log("\ncurrent ordering from scorePing():\n");
 const ordered = M.buildList(PINGS, ALL_ON, NOW);

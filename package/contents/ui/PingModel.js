@@ -44,6 +44,51 @@ function parseState(text) {
     }
 }
 
+/* ------------------------------------------------------------- bridge setup
+ * The widget can install its own bridge plugin, because a KDE Store install
+ * ships nothing but this package — no install.sh, no dpings. It asks
+ * contents/bridge/setup.sh what's on disk and gets three lines back; these two
+ * functions turn that into a state the popup can switch on.
+ */
+
+/** Compare dotted numeric versions. Returns <0 / 0 / >0 like a sort comparator. */
+function compareVersions(a, b) {
+    var x = String(a || "").split("."), y = String(b || "").split(".");
+    for (var i = 0; i < Math.max(x.length, y.length); i++) {
+        // parseInt so a "1.0.0-rc1" segment still compares as 0 rather than NaN.
+        var d = (parseInt(x[i], 10) || 0) - (parseInt(y[i], 10) || 0);
+        if (d !== 0) return d;
+    }
+    return 0;
+}
+
+/**
+ * Parse `setup.sh probe`: BetterDiscord dir, installed @version, bundled
+ * @version — one per line, any of which may be empty.
+ *
+ * state is one of:
+ *   "no-betterdiscord"  BetterDiscord isn't installed, so there's nowhere to put it
+ *   "not-installed"     BetterDiscord is there but has no PingBridge
+ *   "outdated"          the copy in BetterDiscord is older than the bundled one
+ *   "ok"                installed and current (it may still be disabled in Discord)
+ */
+function parseProbe(text) {
+    var lines = String(text || "").split("\n");
+    var r = {
+        bdDir: (lines[0] || "").trim(),
+        installed: (lines[1] || "").trim(),
+        bundled: (lines[2] || "").trim()
+    };
+    if (!r.bdDir) r.state = "no-betterdiscord";
+    else if (!r.installed) r.state = "not-installed";
+    // Only *older* counts. A newer installed copy means hand-edits, and
+    // clobbering someone's own changes to nag about a version is worse than
+    // leaving it be.
+    else if (compareVersions(r.installed, r.bundled) < 0) r.state = "outdated";
+    else r.state = "ok";
+    return r;
+}
+
 /** Config-driven visibility. Returns true when this ping should be listed. */
 function passesFilters(ping, cfg) {
     if (cfg.mutedGuilds && ping.guildId) {

@@ -3,17 +3,19 @@
     "KPlugin": {
         "Authors": [
             {
-                "Name": "Ari Kotler"
+                "Name": "Ari Kotler",
+                "Email": "jansherremway@gmail.com"
             }
         ],
+        "BugReportUrl": "https://github.com/KoJesko/plasma-discord-pings/issues",
         "Category": "Online Services",
-        "Description": "Browse your Discord mentions from the panel with the keyboard. Meta+D opens the list, j/k navigates, Enter jumps to the message in Discord.",
+        "Description": "Browse your Discord mentions from the panel with the keyboard. Meta+Shift+D opens the list, j/k navigates, Enter jumps to the message in Discord.",
         "EnabledByDefault": true,
         "Icon": "discord-pings",
-        "Id": "org.kde.plasma.discordpings",
+        "Id": "com.github.kojesko.discordpings",
         "License": "GPL-3.0-or-later",
         "Name": "Discord Pings",
-        "Version": "0.1.0",
+        "Version": "1.0.0",
         "Website": "https://github.com/KoJesko/plasma-discord-pings"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
