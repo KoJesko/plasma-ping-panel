@@ -1,14 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Deliberately generic: an "@" mention glyph with an unread dot.
+
+  This icon must NOT depict Discord's Clyde mark. Discord's brand guidelines
+  forbid editing, recoloring or reconfiguring their logo, and store.kde.org's
+  publishing terms make the uploader warrant no trademark infringement AND
+  indemnify OpenDesktop against claims. A monochrome redraw of Clyde is still
+  Clyde. An "@" is the universal symbol for a mention and belongs to nobody.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
   <defs>
     <style id="current-color-scheme" type="text/css">
       .ColorScheme-Text { color: #232629; }
     </style>
   </defs>
-  <g class="ColorScheme-Text" fill="currentColor">
-    <!-- Discord-style controller silhouette, simplified for 22px monochrome -->
-    <path d="M8.32 4.2a9.9 9.9 0 0 0-2.5.78c-1.6 2.4-2.42 5.1-2.2 8.02a10.1 10.1 0 0 0 3.06 1.55c.25-.34.47-.7.66-1.08a6.5 6.5 0 0 1-1.04-.5c.09-.06.17-.13.25-.2a7.2 7.2 0 0 0 6.18 0c.08.07.16.14.25.2-.33.2-.68.36-1.04.5.19.38.41.74.66 1.08a10.05 10.05 0 0 0 3.06-1.55c.26-3.38-.84-6.06-2.2-8.02a9.87 9.87 0 0 0-2.5-.78l-.3.63a9.1 9.1 0 0 0-2.03 0zM8.2 11.3c-.6 0-1.1-.55-1.1-1.23s.48-1.24 1.1-1.24c.62 0 1.11.56 1.1 1.24 0 .68-.49 1.23-1.1 1.23zm4.05 0c-.6 0-1.1-.55-1.1-1.23s.49-1.24 1.1-1.24c.62 0 1.11.56 1.1 1.24 0 .68-.48 1.23-1.1 1.23z"/>
-    <!-- Ping / mention marker -->
-    <path d="M15.5 13a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm0 1.4c.44 0 .8.3.8.68v2.1c0 .38-.36.68-.8.68s-.8-.3-.8-.68v-2.1c0-.37.36-.68.8-.68zm0 4.3a.66.66 0 1 1 0 1.3.66.66 0 0 1 0-1.3z"/>
+  <g class="ColorScheme-Text">
+    <!-- @ : inner ring and the arc that wraps it, open toward the lower right
+         so the unread dot sits in the gap rather than colliding with a stroke. -->
+    <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <circle cx="9.6" cy="9.6" r="2.6"/>
+      <path d="M12.2 9.6v1.5a2.1 2.1 0 0 0 4.2 0V9.6A6.8 6.8 0 1 0 11.6 16"/>
+    </g>
+    <!-- Unread marker. Plasma renders this at 22px in a panel, so it has to
+         read as a dot at a glance. The arc above stops short of it on purpose:
+         at 22px an overlapping stroke and disc merge into one smudge. -->
+    <circle cx="17.4" cy="17.4" r="3.6" fill="currentColor"/>
   </g>
 </svg>

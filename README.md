@@ -27,6 +27,13 @@ Discord has no plugin API and no read-only "give me my mentions" endpoint for
 normal accounts, so reading your pings means running code inside the client.
 BetterDiscord is how that's done without a bot.
 
+> **Know what you're installing.** BetterDiscord modifies the Discord client,
+> which Discord's Terms of Service do not permit. Discord has not historically
+> pursued users over client mods, but they reserve the right to act on any
+> account that uses one. That risk comes from BetterDiscord, not from this
+> widget — but this widget doesn't work without it, so it's your risk either
+> way. Decide before you install, not after.
+
 ## How it works
 
 Two halves talking through a file:
@@ -281,3 +288,12 @@ There is no `os`, so use `process.env.HOME` rather than `os.homedir()`.
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+## Trademarks
+
+Not affiliated with, endorsed by, or sponsored by Discord Inc. "Discord" is a
+trademark of Discord Inc., used here only to say what this widget works with.
+
+The icon is deliberately a generic `@` glyph rather than anything resembling
+Discord's logo: their brand guidelines forbid editing, recoloring or
+reconfiguring it, and no part of this project is licensed to use their marks.

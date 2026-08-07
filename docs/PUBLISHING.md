@@ -99,6 +99,26 @@ is required** in the first two lines — someone installing from inside Plasma h
 no idea this needs a second piece, and "it doesn't work" reviews come from
 exactly that gap.
 
+Three things the description must also carry. OpenDesktop's publishing terms
+bar files that "infringe on intellectual property rights" or are "false or
+misleading", and make the uploader indemnify OpenDesktop against third-party
+claims — so these are terms compliance, not politeness:
+
+- **"Not affiliated with, endorsed by, or sponsored by Discord Inc."** Discord's
+  brand guidelines require that nothing imply sponsorship.
+- **That BetterDiscord modifies the Discord client, contrary to Discord's ToS.**
+  Someone installing a widget from inside Plasma cannot be expected to infer
+  that it carries any account risk. Omitting it is the "misleading" case.
+- **No Discord logo anywhere** — not in the icon, not in screenshots' framing,
+  not in the banner. Their guidelines forbid editing, recoloring or
+  reconfiguring the mark, and a monochrome redraw of Clyde is still Clyde. The
+  shipped icon is a generic `@` for exactly this reason; don't "improve" it back
+  into something Discord-shaped.
+
+Screenshots showing the Discord client itself are fine — that's ordinary
+depiction of software you're interoperating with, not use of their marks as
+your own branding. Blur DM contents and usernames before uploading.
+
 **Updates** — *Edit* the existing product, add a new file, bump Version. Don't
 create a second product; Plasma matches updates by product, so a new entry
 orphans everyone who already installed it.
