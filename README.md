@@ -105,18 +105,29 @@ Higher sorts first. It ships as plain recency, which means a two-minute-old
 Iterate without restarting plasmashell:
 
 ```bash
-node tests/model-test.mjs     # runs the checks + prints the resulting order
-node tests/bridge-test.mjs    # capture logic: what counts as a ping, against a stubbed Discord
+dpings sort     # just the resulting order
+dpings test     # model + bridge test suites
 ```
 
-## Testing the widget without Discord
+## The `dpings` helper
 
-```bash
-node tools/mock-bridge.mjs    # writes fake pings, then prints commands the widget sends
-node tools/mock-bridge.mjs --clear
-```
+`install.sh` links `bin/dpings` into `~/.local/bin`. It resolves the repo itself,
+so it works from any directory (set `DPINGS_REPO` if the repo lives elsewhere).
 
-Useful for checking that `x` / `d` / `a` actually reach the bridge.
+| Command | Does |
+|---------|------|
+| `dpings status` | bridge up/down, ping count, breakdown by kind |
+| `dpings clear` | empty the list — **run this before enabling PingBridge for real**, or leftover fixtures persist into your real pings |
+| `dpings mock` | write fake pings to test the UI with Discord closed |
+| `dpings watch` | fake pings + print every command the widget sends (verifies `x` / `d` / `a` land) |
+| `dpings sort` | print the current `scorePing()` ordering |
+| `dpings test` | run both test suites |
+| `dpings reload` | restart plasmashell to pick up QML changes |
+| `dpings edit` | open `PingModel.js` in `$EDITOR` |
+
+The underlying scripts are `tools/mock-bridge.mjs` and `tests/*.mjs`; invoking
+them with `node` directly only works from the repo root, which is why `dpings`
+exists.
 
 ## Layout
 
@@ -145,3 +156,23 @@ and in Discord's console (`Ctrl+Shift+I`).
 
 **`Enter` doesn't jump to the message** — check `xdg-mime query default
 x-scheme-handler/discord` returns `discord.desktop`.
+
+## When Discord updates and BetterDiscord disappears
+
+Discord overwrites `discord_desktop_core/index.js` on every update, which undoes
+the BetterDiscord injection — and takes PingBridge with it. Symptom: the widget
+dims and says "Bridge offline".
+
+```bash
+dpings inject     # then fully quit Discord (tray icon → Quit) and relaunch
+```
+
+`betterdiscordctl install` may fail here with:
+
+```
+ERROR: Directory 'discord_desktop_core' not found in: ~/.config/discord/app-X/modules
+```
+
+That's a bug in `betterdiscordctl`, not a broken Discord install — it hardcodes
+`discord_desktop_core-1` while current Discord ships `discord_desktop_core-2`.
+`dpings inject` globs the suffix instead, so it keeps working.

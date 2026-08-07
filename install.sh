@@ -38,6 +38,18 @@ else
   install -m 0644 "$REPO/betterdiscord/PingBridge.plugin.js" "$BD_PLUGINS/PingBridge.plugin.js"
 fi
 
+# --- helper command ----------------------------------------------------------
+# Always a symlink: `dpings` resolves the repo at runtime, so linking keeps it
+# correct even when the repo moves.
+BIN_DIR="$HOME/.local/bin"
+say "Linking dpings into $BIN_DIR"
+mkdir -p "$BIN_DIR"
+ln -sfn "$REPO/bin/dpings" "$BIN_DIR/dpings"
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ;;
+  *) warn "$BIN_DIR is not on PATH; add it to use \`dpings\`" ;;
+esac
+
 # --- plasma applet -----------------------------------------------------------
 if (( LINK )); then
   say "Linking applet into $PLASMOID_DIR"

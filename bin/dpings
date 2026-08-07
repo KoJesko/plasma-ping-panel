@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Discord Pings widget helper. Runs from anywhere; resolves the repo itself.
+set -euo pipefail
+
+REPO="${DPINGS_REPO:-$HOME/GitHub/plasma-discord-pings}"
+BRIDGE_DIR="$HOME/.local/share/discord-pings"
+
+[[ -d "$REPO" ]] || { echo "dpings: repo not found at $REPO (set DPINGS_REPO)" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+usage: dpings <command>
+
+  clear     empty the ping list (do this before enabling PingBridge for real)
+  mock      write fake pings so the widget can be tested with Discord closed
+  watch     write fake pings, then print every command the widget sends
+  status    show bridge state: up/down, ping count, last update
+  inject    (re)inject BetterDiscord into Discord's core module
+  uninject  undo that, restoring Discord's original index.js
+  test      run the model + bridge test suites
+  sort      print the current ordering produced by scorePing()
+  reload    restart plasmashell to pick up QML changes
+  edit      open PingModel.js (where scorePing lives) in \$EDITOR
+EOF
+}
+
+case "${1:-}" in
+  clear)  node "$REPO/tools/mock-bridge.mjs" --clear ;;
+  mock)   node "$REPO/tools/mock-bridge.mjs" --once ;;
+  watch)  node "$REPO/tools/mock-bridge.mjs" ;;
+  test)   node "$REPO/tests/model-test.mjs" && node "$REPO/tests/bridge-test.mjs" ;;
+  sort)   node "$REPO/tests/model-test.mjs" | sed -n '/current ordering/,$p' ;;
+  reload)
+    kquitapp6 plasmashell >/dev/null 2>&1 || true
+    sleep 2
+    (setsid plasmashell >/dev/null 2>&1 &)
+    echo "plasmashell restarted"
+    ;;
+  edit)   "${EDITOR:-nano}" "$REPO/package/contents/ui/PingModel.js" ;;
+
+  inject|uninject)
+    # betterdiscordctl hardcodes `discord_desktop_core-1`; Discord ships -2 and
+    # will ship -3 eventually, so glob the suffix instead of assuming it.
+    # Every Discord update overwrites index.js and undoes the injection.
+    asar="$HOME/.config/BetterDiscord/data/betterdiscord.asar"
+    mapfile -t cores < <(ls -d "$HOME"/.config/discord/app-*/modules/discord_desktop_core-*/discord_desktop_core 2>/dev/null | sort -V)
+    [[ ${#cores[@]} -gt 0 ]] || { echo "dpings: no discord_desktop_core found — is Discord installed?" >&2; exit 1; }
+    core="${cores[-1]}"                      # newest app version wins
+    idx="$core/index.js"
+    if [[ "$1" == "uninject" ]]; then
+      if [[ -f "$idx.orig" ]]; then
+        mv -f "$idx.orig" "$idx"; echo "restored $idx"
+      else
+        printf "%s\n" "module.exports = require('./core.asar');" > "$idx"
+        echo "no backup found; wrote Discord's default line to $idx"
+      fi
+    else
+      [[ -f "$asar" ]] || { echo "dpings: $asar missing — install BetterDiscord first" >&2; exit 1; }
+      if grep -q betterdiscord "$idx" 2>/dev/null; then
+        echo "already injected: $idx"
+      else
+        cp -n "$idx" "$idx.orig" 2>/dev/null || true
+        printf '%s\n%s\n' "require(\"$asar\");" "module.exports = require('./core.asar');" > "$idx"
+        echo "injected $idx"
+      fi
+    fi
+    echo "restart Discord completely (tray icon -> Quit) for this to take effect"
+    ;;
+  status)
+    f="$BRIDGE_DIR/pings.json"
+    if [[ ! -f "$f" ]]; then echo "no state file at $f (bridge has never run)"; exit 0; fi
+    node -e '
+      const fs = require("fs");
+      const s = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      const n = (s.pings || []).length;
+      const unread = (s.pings || []).filter(p => !p.read).length;
+      const age = Math.round((Date.now() - (s.updatedAt || 0)) / 1000);
+      console.log(`bridge:  ${s.bridgeUp ? "up" : "DOWN"}${s.error ? " — " + s.error : ""}`);
+      console.log(`pings:   ${n} (${unread} unread)`);
+      console.log(`updated: ${age}s ago`);
+      const byKind = {};
+      for (const p of s.pings || []) byKind[p.kind] = (byKind[p.kind] || 0) + 1;
+      if (n) console.log("kinds:   " + Object.entries(byKind).map(([k, v]) => `${k}=${v}`).join(" "));
+    ' "$f"
+    ;;
+  ""|-h|--help|help) usage ;;
+  *) echo "dpings: unknown command '${1}'" >&2; usage; exit 1 ;;
+esac
