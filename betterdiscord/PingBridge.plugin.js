@@ -127,24 +127,45 @@ module.exports = class PingBridge {
     startInternal() {
         const W = BdApi.Webpack;
         this.modules = {
-            Dispatcher: W.getModule(m => m?.dispatch && m?.subscribe && m?._actionHandlers)
-                || W.getByKeys("dispatch", "subscribe"),
+            /*
+             * searchExports:true is REQUIRED — the Flux dispatcher lives in a
+             * nested export, so a plain getByKeys never finds it. Key set and
+             * flag both taken from BetterDiscord's own core module map:
+             *   Dispatcher: {filter: byKeys(["dispatch","subscribe","register"]),
+             *                searchExports: true}
+             */
+            Dispatcher: W.getByKeys("dispatch", "subscribe", "register", { searchExports: true })
+                || W.getByKeys("dispatch", "subscribe", { searchExports: true })
+                || W.getModule(m => m?.dispatch && m?.subscribe, { searchExports: true }),
             UserStore: findStore(W, "UserStore"),
             ChannelStore: findStore(W, "ChannelStore"),
             GuildStore: findStore(W, "GuildStore"),
             GuildMemberStore: findStore(W, "GuildMemberStore"),
-            HTTP: W.getByKeys("getAPIBaseURL", "get") || W.getByKeys("get", "post", "patch", "del"),
+            HTTP: W.getByKeys("getAPIBaseURL", "get", { searchExports: true })
+                || W.getByKeys("get", "post", "patch", "del", { searchExports: true })
+                || W.getByKeys("get", "post", "patch", "del"),
         };
 
-        const missing = Object.entries(this.modules)
-            .filter(([, v]) => !v)
-            .map(([k]) => k);
-        if (missing.length) {
-            // Write the failure into the state file so the widget can surface it
-            // instead of just silently showing an empty list forever.
-            this.writeError(`PingBridge could not resolve: ${missing.join(", ")}. Discord likely changed its internals.`);
-            BdApi.UI.showToast(`PingBridge: missing ${missing.join(", ")}`, { type: "error" });
+        /*
+         * Only these three are load-bearing. Missing GuildStore just costs us
+         * server names, GuildMemberStore costs role-ping detection, and HTTP
+         * costs backfill and mark-as-read — none of which is a reason to refuse
+         * to capture pings at all. Degrade, don't abort.
+         */
+        const REQUIRED = ["Dispatcher", "UserStore", "ChannelStore"];
+        const missing = Object.entries(this.modules).filter(([, v]) => !v).map(([k]) => k);
+        const fatal = missing.filter(k => REQUIRED.includes(k));
+
+        if (fatal.length) {
+            // Written to the state file so the widget surfaces it, rather than
+            // sitting on an empty list forever with no explanation.
+            this.writeError(`PingBridge could not resolve: ${fatal.join(", ")}. Discord likely changed its internals.`);
+            try { BdApi.UI.showToast(`PingBridge: missing ${fatal.join(", ")}`, { type: "error" }); } catch (_) { /* no UI */ }
             return;
+        }
+        if (missing.length) {
+            this.degraded = missing;
+            BdApi.Logger?.warn?.("PingBridge", `running degraded, missing: ${missing.join(", ")}`);
         }
 
         fs.mkdirSync(CMD_DIR, { recursive: true });
@@ -259,7 +280,11 @@ module.exports = class PingBridge {
 
     toRecord(msg, channel, kind) {
         const guildId = msg.guild_id || channel?.guild_id || null;
-        const guild = guildId ? this.modules.GuildStore.getGuild(guildId) : null;
+        // GuildStore is optional; without it we fall back to showing the raw id.
+        let guild = null;
+        try {
+            if (guildId) guild = this.modules.GuildStore?.getGuild?.(guildId) || null;
+        } catch (_) { /* store went away mid-session */ }
         const author = msg.author || {};
 
         let channelName;
@@ -460,6 +485,9 @@ module.exports = class PingBridge {
             version: 1,
             updatedAt: Date.now(),
             bridgeUp: true,
+            // Non-fatal missing modules, so `dpings status` can explain why a
+            // feature (server names, role pings, backfill) isn't working.
+            degraded: this.degraded || null,
             self: me ? { id: me.id, name: me.global_name || me.username } : null,
             pings: this.pings,
         });

@@ -90,6 +90,7 @@ case "${1:-}" in
       console.log(`bridge:  ${s.bridgeUp ? "up" : "DOWN"}${s.error ? " — " + s.error : ""}`);
       console.log(`pings:   ${n} (${unread} unread)`);
       console.log(`updated: ${age}s ago`);
+      if (s.degraded && s.degraded.length) console.log(`degraded: missing ${s.degraded.join(", ")}`);
       const byKind = {};
       for (const p of s.pings || []) byKind[p.kind] = (byKind[p.kind] || 0) + 1;
       if (n) console.log("kinds:   " + Object.entries(byKind).map(([k, v]) => `${k}=${v}`).join(" "));
