@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <!-- Directory the BetterDiscord PingBridge plugin writes into.
+         Contains pings.json (state) and commands/ (widget -> client). -->
+    <entry name="bridgeDir" type="String">
+      <default>$HOME/.local/share/discord-pings</default>
+    </entry>
+
+    <!-- How often the widget re-reads pings.json, in seconds. The bridge
+         also bumps an mtime we poll, so this is cheap. -->
+    <entry name="refreshInterval" type="Int">
+      <default>3</default>
+    </entry>
+    <entry name="maxItems" type="Int">
+      <default>50</default>
+    </entry>
+
+    <!-- Behaviour -->
+    <entry name="openTarget" type="String">
+      <default>app</default>
+    </entry>
+    <entry name="markReadOnOpen" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="dismissOnOpen" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="notifyNew" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="showBadge" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="hideWhenEmpty" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="showAvatars" type="Bool">
+      <default>true</default>
+    </entry>
+    <!-- Set once on first run so rebinding the shortcut sticks. -->
+    <entry name="shortcutInitialized" type="Bool">
+      <default>false</default>
+    </entry>
+  </group>
+
+  <group name="Filters">
+    <entry name="showDirect" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showRoles" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showEveryone" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="showReplies" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showDMs" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showKeywords" type="Bool">
+      <default>true</default>
+    </entry>
+    <!-- Comma-separated guild IDs to never show pings from. -->
+    <entry name="mutedGuilds" type="String">
+      <default></default>
+    </entry>
+  </group>
+</kcfg>
