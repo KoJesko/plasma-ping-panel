@@ -15,6 +15,7 @@ usage: dpings <command>
   mock      write fake pings so the widget can be tested with Discord closed
   watch     write fake pings, then print every command the widget sends
   status    show bridge state: up/down, ping count, last update
+  sync      copy the bridge plugin from the repo into BetterDiscord's folder
   inject    (re)inject BetterDiscord into Discord's core module
   uninject  undo that, restoring Discord's original index.js
   test      run the model + bridge test suites
@@ -37,6 +38,17 @@ case "${1:-}" in
     echo "plasmashell restarted"
     ;;
   edit)   "${EDITOR:-nano}" "$REPO/package/contents/ui/PingModel.js" ;;
+
+  sync)
+    # A real copy, not a symlink — BD's addon scanner is unreliable with links.
+    for bd in "$HOME/.config/BetterDiscord/plugins" \
+              "$HOME/.var/app/com.discordapp.Discord/config/BetterDiscord/plugins"; do
+      [[ -d "$bd" ]] || continue
+      install -m 0644 "$REPO/betterdiscord/PingBridge.plugin.js" "$bd/PingBridge.plugin.js"
+      echo "synced -> $bd/PingBridge.plugin.js"
+    done
+    echo "BetterDiscord hot-reloads plugins; no Discord restart needed"
+    ;;
 
   inject|uninject)
     # betterdiscordctl hardcodes `discord_desktop_core-1`; Discord ships -2 and

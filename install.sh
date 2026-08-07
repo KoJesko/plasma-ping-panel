@@ -32,11 +32,10 @@ done
 # --- bridge plugin -----------------------------------------------------------
 say "Installing PingBridge into $BD_PLUGINS"
 mkdir -p "$BRIDGE_DIR/commands"
-if (( LINK )); then
-  ln -sfn "$REPO/betterdiscord/PingBridge.plugin.js" "$BD_PLUGINS/PingBridge.plugin.js"
-else
-  install -m 0644 "$REPO/betterdiscord/PingBridge.plugin.js" "$BD_PLUGINS/PingBridge.plugin.js"
-fi
+# Always a real copy, never a symlink even under --link: BetterDiscord's addon
+# scanner does not reliably pick up symlinked plugin files. Use `dpings sync`
+# to push repo edits across.
+install -m 0644 "$REPO/betterdiscord/PingBridge.plugin.js" "$BD_PLUGINS/PingBridge.plugin.js"
 
 # --- helper command ----------------------------------------------------------
 # Always a symlink: `dpings` resolves the repo at runtime, so linking keeps it

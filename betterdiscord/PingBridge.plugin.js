@@ -19,10 +19,15 @@ const MAX_PINGS = 200;
 const WRITE_DEBOUNCE_MS = 250;
 const CMD_SWEEP_MS = 2000;
 
-const W = BdApi.Webpack;
+/*
+ * Nothing at module scope may touch BdApi. This file is evaluated the moment
+ * BetterDiscord loads it, and any throw there surfaces only as the generic
+ * "An error was encountered while trying to load this plugin" with no clue
+ * which line did it. Every BdApi access is deferred into a method.
+ */
 
 /** Stores get renamed across Discord builds, so look them up two ways. */
-function findStore(name) {
+function findStore(W, name) {
     try {
         if (typeof W.getStore === "function") {
             const s = W.getStore(name);
@@ -40,22 +45,25 @@ module.exports = class PingBridge {
         this.watcher = null;
         this.sweepTimer = null;
         this.subscriptions = [];
-        this.settings = Object.assign(
-            { keywords: "", captureEveryone: true, backfillOnStart: true },
-            BdApi.Data.load("PingBridge", "settings") || {}
-        );
+        this.settings = { keywords: "", captureEveryone: true, backfillOnStart: true };
+        // Reading saved settings is best-effort: a failure here must not stop
+        // the plugin from loading, or we're back to the opaque load error.
+        try {
+            Object.assign(this.settings, BdApi.Data.load("PingBridge", "settings") || {});
+        } catch (_) { /* first run, or BdApi.Data not ready yet */ }
     }
 
     // ---------------------------------------------------------------- lifecycle
 
     start() {
+        const W = BdApi.Webpack;
         this.modules = {
             Dispatcher: W.getModule(m => m?.dispatch && m?.subscribe && m?._actionHandlers)
                 || W.getByKeys("dispatch", "subscribe"),
-            UserStore: findStore("UserStore"),
-            ChannelStore: findStore("ChannelStore"),
-            GuildStore: findStore("GuildStore"),
-            GuildMemberStore: findStore("GuildMemberStore"),
+            UserStore: findStore(W, "UserStore"),
+            ChannelStore: findStore(W, "ChannelStore"),
+            GuildStore: findStore(W, "GuildStore"),
+            GuildMemberStore: findStore(W, "GuildMemberStore"),
             HTTP: W.getByKeys("getAPIBaseURL", "get") || W.getByKeys("get", "post", "patch", "del"),
         };
 
