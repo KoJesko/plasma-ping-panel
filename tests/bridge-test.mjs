@@ -71,6 +71,40 @@ const check = (name, fn) => {
     catch (e) { failures++; console.log(`  FAIL ${name}\n       ${e.message}`); }
 };
 
+/*
+ * BetterDiscord's require() is a switch over a fixed module list, not Node's
+ * resolver. An unlisted name is resolved as a FILE relative to the plugins
+ * folder, so it throws "ENOENT ... lstat" at load time and BD reports only its
+ * generic "error was encountered while trying to load this plugin". require("os")
+ * cost hours to that exact trap, so it is asserted rather than remembered.
+ * List extracted from betterdiscord.js (the Fd require shim).
+ */
+const BD_MODULES = new Set([
+    "request", "https", "original-fs", "fs", "path", "events",
+    "electron", "process", "vm", "module", "buffer", "crypto",
+]);
+
+/** Strip comments so the scan sees code only — the file documents this trap in prose. */
+function codeOf(relative) {
+    return fs.readFileSync(new URL(relative, import.meta.url), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/^\s*\/\/.*$/gm, " ");
+}
+
+console.log("\nbetterdiscord require compatibility");
+check("only requires modules BetterDiscord's shim supports", () => {
+    const src = codeOf("../betterdiscord/PingBridge.plugin.js");
+    const used = new Set();
+    for (const m of src.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) used.add(m[1]);
+    const bad = [...used].filter(n => !n.startsWith("./") && !BD_MODULES.has(n));
+    assert.deepEqual(bad, [],
+        `unsupported require(): ${bad.join(", ")} — BD resolves these as file paths and throws ENOENT at load`);
+});
+check("does not call os.homedir (no os module in BD)", () => {
+    assert.equal(/\bos\s*\.\s*homedir\s*\(/.exec(codeOf("../betterdiscord/PingBridge.plugin.js")), null,
+        "os.homedir() is unavailable; use process.env.HOME");
+});
+
 console.log("\nclassification");
 check("plain channel chatter is not a ping", () => assert.equal(classify(), null));
 check("own message is never a ping", () =>

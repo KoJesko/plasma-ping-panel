@@ -16,20 +16,34 @@
  * here is guarded and its failure recorded for start() to report.
  */
 
-let fs = null, path = null, os = null;
+/*
+ * BetterDiscord's require() is NOT Node's. It is a switch over a fixed list:
+ *
+ *   request  https  original-fs  fs  path  events
+ *   electron  process  vm  module  buffer  crypto
+ *
+ * Anything else falls through to its file loader, which resolves the name as a
+ * path relative to the plugins folder — so require("os") becomes
+ * realpathSync("~/.config/BetterDiscord/plugins/os") and throws
+ * "ENOENT: no such file or directory, lstat". There is no "os" case, so
+ * os.homedir() is simply unavailable here; the home directory comes from
+ * process.env instead.
+ */
+let fs = null, path = null, proc = null;
 let nodeError = null;
 try {
     fs = require("fs");
     path = require("path");
-    os = require("os");
+    proc = require("process");
 } catch (err) {
     nodeError = err;   // reported by start(); see reportNodeFailure()
 }
 
-// Computed defensively: if os/path are missing, fall back to a literal path
-// built from env so the constants still exist and evaluation completes.
 const HOME = (() => {
-    try { return os ? os.homedir() : (process.env.HOME || ""); } catch (_) { return ""; }
+    try {
+        const env = (proc && proc.env) || (typeof process !== "undefined" && process.env) || {};
+        return env.HOME || env.USERPROFILE || "";
+    } catch (_) { return ""; }
 })();
 const join = (...parts) => (path ? path.join(...parts) : parts.join("/"));
 
@@ -100,11 +114,13 @@ module.exports = class PingBridge {
      */
     reportNodeFailure() {
         const detail = (nodeError && (nodeError.stack || nodeError.message)) || String(nodeError);
-        try { BdApi.Logger.error("PingBridge", "Node modules unavailable", nodeError); } catch (_) { /* no logger */ }
+        try { BdApi.Logger.error("PingBridge", "require() failed", nodeError); } catch (_) { /* no logger */ }
         try {
             BdApi.UI.alert("PingBridge cannot start",
-                "Node's fs/path/os modules are unavailable in this Discord build, so the bridge "
-                + "cannot write the state file.\n\n```\n" + detail + "\n```");
+                "A module require() failed, so the bridge cannot write its state file. "
+                + "BetterDiscord supports only a fixed set of modules (fs, path, process, electron, "
+                + "events, vm, module, buffer, crypto, https, request, original-fs); anything else is "
+                + "resolved as a file path and throws ENOENT.\n\n```\n" + detail + "\n```");
         } catch (_) { /* no UI either */ }
     }
 

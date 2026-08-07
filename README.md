@@ -176,3 +176,22 @@ ERROR: Directory 'discord_desktop_core' not found in: ~/.config/discord/app-X/mo
 That's a bug in `betterdiscordctl`, not a broken Discord install — it hardcodes
 `discord_desktop_core-1` while current Discord ships `discord_desktop_core-2`.
 `dpings inject` globs the suffix instead, so it keeps working.
+
+## BetterDiscord's require() is not Node's
+
+`betterdiscord.js` implements `require` as a switch over a fixed list:
+
+```
+request  https  original-fs  fs  path  events
+electron  process  vm  module  buffer  crypto
+```
+
+Anything else falls through to its file loader, which resolves the name as a
+path relative to the plugins folder. So `require("os")` becomes
+`realpathSync("~/.config/BetterDiscord/plugins/os")` and throws
+`ENOENT: no such file or directory, lstat` — **at load time**, which BD reports
+only as the generic "An error was encountered while trying to load this plugin",
+with no stack in the console or `debug.log`.
+
+There is no `os`, so use `process.env.HOME` rather than `os.homedir()`.
+`tests/bridge-test.mjs` asserts this; run `dpings test` after touching imports.
