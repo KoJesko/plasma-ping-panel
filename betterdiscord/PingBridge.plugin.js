@@ -6,25 +6,41 @@
  * @source https://github.com/KoJesko/plasma-discord-pings
  */
 
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
+/*
+ * MODULE SCOPE MUST NOT THROW.
+ *
+ * This file is evaluated the instant BetterDiscord loads it. Anything that
+ * throws here surfaces only as the generic "An error was encountered while
+ * trying to load this plugin" — no line, no stack, nothing in debug.log. That
+ * makes it undebuggable from outside Discord, so every fallible operation up
+ * here is guarded and its failure recorded for start() to report.
+ */
 
-const DATA_DIR = path.join(os.homedir(), ".local", "share", "discord-pings");
-const STATE_FILE = path.join(DATA_DIR, "pings.json");
+let fs = null, path = null, os = null;
+let nodeError = null;
+try {
+    fs = require("fs");
+    path = require("path");
+    os = require("os");
+} catch (err) {
+    nodeError = err;   // reported by start(); see reportNodeFailure()
+}
+
+// Computed defensively: if os/path are missing, fall back to a literal path
+// built from env so the constants still exist and evaluation completes.
+const HOME = (() => {
+    try { return os ? os.homedir() : (process.env.HOME || ""); } catch (_) { return ""; }
+})();
+const join = (...parts) => (path ? path.join(...parts) : parts.join("/"));
+
+const DATA_DIR = join(HOME, ".local", "share", "discord-pings");
+const STATE_FILE = join(DATA_DIR, "pings.json");
 const STATE_TMP = STATE_FILE + ".tmp";
-const CMD_DIR = path.join(DATA_DIR, "commands");
+const CMD_DIR = join(DATA_DIR, "commands");
 
 const MAX_PINGS = 200;
 const WRITE_DEBOUNCE_MS = 250;
 const CMD_SWEEP_MS = 2000;
-
-/*
- * Nothing at module scope may touch BdApi. This file is evaluated the moment
- * BetterDiscord loads it, and any throw there surfaces only as the generic
- * "An error was encountered while trying to load this plugin" with no clue
- * which line did it. Every BdApi access is deferred into a method.
- */
 
 /** Stores get renamed across Discord builds, so look them up two ways. */
 function findStore(W, name) {
@@ -34,7 +50,11 @@ function findStore(W, name) {
             if (s) return s;
         }
     } catch (_) { /* fall through to the generic lookup */ }
-    return W.getModule(m => m?.getName?.() === name, { searchExports: true });
+    try {
+        return W.getModule(m => m?.getName?.() === name, { searchExports: true });
+    } catch (_) {
+        return null;   // a throwing filter must not take the whole plugin down
+    }
 }
 
 module.exports = class PingBridge {
@@ -55,7 +75,40 @@ module.exports = class PingBridge {
 
     // ---------------------------------------------------------------- lifecycle
 
+    /*
+     * BetterDiscord catches start() exceptions into an in-memory store that
+     * reaches neither the console nor debug.log — only the settings UI. So we
+     * never throw: any failure is written to the state file instead, where the
+     * widget shows it and `dpings status` can print it.
+     */
     start() {
+        if (nodeError) return this.reportNodeFailure();
+        try {
+            this.startInternal();
+        } catch (err) {
+            const detail = (err && (err.stack || err.message)) || String(err);
+            this.writeError(`PingBridge.start() threw: ${detail}`);
+            try { BdApi.Logger.error("PingBridge", "start failed", err); } catch (_) { /* logger gone too */ }
+            try { BdApi.UI.showToast("PingBridge failed to start — see dpings status", { type: "error" }); } catch (_) { /* no UI */ }
+        }
+    }
+
+    /*
+     * Without fs we cannot write the state file, so this is the one failure we
+     * can only announce in-client. Says so explicitly rather than leaving the
+     * widget sitting on a stale file looking healthy.
+     */
+    reportNodeFailure() {
+        const detail = (nodeError && (nodeError.stack || nodeError.message)) || String(nodeError);
+        try { BdApi.Logger.error("PingBridge", "Node modules unavailable", nodeError); } catch (_) { /* no logger */ }
+        try {
+            BdApi.UI.alert("PingBridge cannot start",
+                "Node's fs/path/os modules are unavailable in this Discord build, so the bridge "
+                + "cannot write the state file.\n\n```\n" + detail + "\n```");
+        } catch (_) { /* no UI either */ }
+    }
+
+    startInternal() {
         const W = BdApi.Webpack;
         this.modules = {
             Dispatcher: W.getModule(m => m?.dispatch && m?.subscribe && m?._actionHandlers)
@@ -396,8 +449,15 @@ module.exports = class PingBridge {
         });
     }
 
+    /** Keep any pings we already had; an error must not wipe the list. */
     writeError(message) {
-        this.writeState({ version: 1, updatedAt: Date.now(), bridgeUp: false, error: message, pings: [] });
+        this.writeState({
+            version: 1,
+            updatedAt: Date.now(),
+            bridgeUp: false,
+            error: message,
+            pings: this.pings || [],
+        });
     }
 
     /** Atomic write so the widget never reads a half-written file. */
