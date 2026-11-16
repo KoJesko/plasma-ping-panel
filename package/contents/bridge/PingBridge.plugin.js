@@ -53,6 +53,21 @@ const STATE_TMP = STATE_FILE + ".tmp";
 const CMD_DIR = join(DATA_DIR, "commands");
 
 const MAX_PINGS = 200;
+
+// pings.json holds DM and message text. Many distros still create $HOME 0755,
+// so the default umask would leave it readable by every local user.
+const DIR_MODE = 0o700;
+const FILE_MODE = 0o600;
+
+/** Make the data dir (and commands/) exist and be private to this user. */
+function ensurePrivateDir(dir) {
+    fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+    // mkdirSync's mode does not apply to a directory that already exists.
+    try { fs.chmodSync(dir, DIR_MODE); } catch (_) { /* not ours; best effort */ }
+}
+
+/** Discord IDs are decimal snowflakes; anything else must not reach a URL path. */
+const isSnowflake = (v) => typeof v === "string" && /^\d{1,20}$/.test(v);
 const WRITE_DEBOUNCE_MS = 250;
 const CMD_SWEEP_MS = 2000;
 
@@ -168,7 +183,8 @@ module.exports = class PingBridge {
             BdApi.Logger?.warn?.("PingBridge", `running degraded, missing: ${missing.join(", ")}`);
         }
 
-        fs.mkdirSync(CMD_DIR, { recursive: true });
+        ensurePrivateDir(DATA_DIR);
+        ensurePrivateDir(CMD_DIR);
         this.loadState();
 
         this.onMessage = this.handleMessageCreate.bind(this);
@@ -446,7 +462,10 @@ module.exports = class PingBridge {
 
     ack(channelId, messageId) {
         const { HTTP } = this.modules;
-        if (!HTTP?.post || !channelId || !messageId) return;
+        // These come from command files, so they are validated before being
+        // put into a path: "../" in either would aim the authenticated
+        // request at some other API endpoint.
+        if (!HTTP?.post || !isSnowflake(channelId) || !isSnowflake(messageId)) return;
         HTTP.post({
             url: `/channels/${channelId}/messages/${messageId}/ack`,
             body: { token: null },
@@ -455,7 +474,7 @@ module.exports = class PingBridge {
 
     removeFromInbox(messageId) {
         const { HTTP } = this.modules;
-        if (!HTTP?.del || !messageId) return;
+        if (!HTTP?.del || !isSnowflake(messageId)) return;
         HTTP.del({ url: `/users/@me/mentions/${messageId}` })
             .catch(err => BdApi.Logger?.warn?.("PingBridge", "inbox delete failed", err));
     }
@@ -507,8 +526,10 @@ module.exports = class PingBridge {
     /** Atomic write so the widget never reads a half-written file. */
     writeState(obj) {
         try {
-            fs.mkdirSync(DATA_DIR, { recursive: true });
-            fs.writeFileSync(STATE_TMP, JSON.stringify(obj), "utf8");
+            ensurePrivateDir(DATA_DIR);
+            fs.writeFileSync(STATE_TMP, JSON.stringify(obj), { encoding: "utf8", mode: FILE_MODE });
+            // mode only applies on create; tighten a tmp file left by an older version.
+            fs.chmodSync(STATE_TMP, FILE_MODE);
             fs.renameSync(STATE_TMP, STATE_FILE);
         } catch (err) {
             BdApi.Logger?.error?.("PingBridge", "state write failed", err);

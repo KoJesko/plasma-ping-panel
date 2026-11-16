@@ -202,5 +202,32 @@ check("malformed json does not throw", () => {
     fs.rmSync(f, { force: true });
 });
 
+console.log("\nsecurity");
+check("ack/dismiss never put a non-snowflake ID into an API path", () => {
+    const urls = [];
+    const saved = bridge.modules.HTTP;
+    bridge.modules.HTTP = {
+        post: async (r) => { urls.push(r.url); },
+        del: async (r) => { urls.push(r.url); },
+    };
+    try {
+        bridge.ack("../../guilds/1", "2");
+        bridge.ack("1", "2/../../../users/@me");
+        bridge.removeFromInbox("../../relationships/1");
+        assert.deepEqual(urls, [], `unexpected requests: ${urls.join(", ")}`);
+        bridge.ack("123", "456");
+        bridge.removeFromInbox("456");
+        assert.deepEqual(urls, ["/channels/123/messages/456/ack", "/users/@me/mentions/456"]);
+    } finally {
+        bridge.modules.HTTP = saved;
+    }
+});
+check("state file and its directory are private to the user", () => {
+    bridge.writeState({ version: 1, pings: [] });
+    const dir = path.join(os.homedir(), ".local", "share", "discord-pings");
+    assert.equal(fs.statSync(dir).mode & 0o777, 0o700, "data dir should be 0700");
+    assert.equal(fs.statSync(path.join(dir, "pings.json")).mode & 0o777, 0o600, "pings.json should be 0600");
+});
+
 console.log(failures ? `\n${failures} check(s) failed\n` : "\nall checks passed\n");
 process.exit(failures ? 1 : 0);
