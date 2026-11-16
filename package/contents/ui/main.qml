@@ -82,8 +82,11 @@ PlasmoidItem {
     function tick() { now = Date.now(); }
 
     // ------------------------------------------------------------------- shell
-    // Plasma has no file-read QML API, so we shell out. Commands are wrapped in
-    // `sh -c` specifically so $HOME in the configured path expands.
+    // Plasma has no file-read QML API, so we shell out. The configured bridge
+    // directory is never spliced into shell source: it is passed to `sh -c` as
+    // a positional argument ($1), and only a leading $HOME, ${HOME} or ~ is
+    // expanded (by dirPrelude). Splicing it in would let a `"`, `$(…)` or
+    // backtick in the setting run as a command.
     Plasma5Support.DataSource {
         id: shell
         engine: "executable"
@@ -112,8 +115,17 @@ PlasmoidItem {
         return "'" + String(s).replace(/'/g, "'\\''") + "'";
     }
 
+    // Sets $d to the bridge dir taken from $1, expanding a leading $HOME/~.
+    readonly property string dirPrelude:
+        'd=$1; case $d in ' +
+        "'$HOME'|'$HOME'/*) d=$HOME${d#'$HOME'} ;; " +
+        "'${HOME}'|'${HOME}'/*) d=$HOME${d#'${HOME}'} ;; " +
+        "'~'|'~'/*) d=$HOME${d#'~'} ;; " +
+        'esac; '
+
     readonly property string readCommand:
-        "sh -c " + shQuote('cat -- "' + bridgeDir + '/pings.json" 2>/dev/null')
+        "sh -c " + shQuote(dirPrelude + 'cat -- "$d/pings.json" 2>/dev/null') +
+        " sh " + shQuote(bridgeDir)
     readonly property string probeCommand:
         "sh " + shQuote(setupScript) + " probe"
     readonly property string installBridgeCommand:
@@ -162,13 +174,14 @@ PlasmoidItem {
     function sendCommand(obj) {
         commandSeq += 1;
         const name = Date.now() + "-" + commandSeq + ".json";
-        const dir = bridgeDir + "/commands";
         const payload = JSON.stringify(obj);
-        const script =
-            'mkdir -p "' + dir + '" && ' +
-            'printf %s ' + shQuote(payload) + ' > "' + dir + '/.' + name + '" && ' +
-            'mv -- "' + dir + '/.' + name + '" "' + dir + '/' + name + '"';
-        shell.exec("sh -c " + shQuote(script));
+        // $1 = bridge dir, $2 = file name, $3 = payload; nothing interpolated.
+        const script = dirPrelude +
+            'c="$d/commands" && mkdir -p -- "$c" && ' +
+            'printf %s "$3" > "$c/.$2" && ' +
+            'mv -- "$c/.$2" "$c/$2"';
+        shell.exec("sh -c " + shQuote(script) + " sh " +
+                   shQuote(bridgeDir) + " " + shQuote(name) + " " + shQuote(payload));
     }
 
     function openUrl(url) { shell.exec("xdg-open " + shQuote(url)); }

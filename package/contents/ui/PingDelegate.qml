@@ -75,6 +75,11 @@ PlasmaComponents.ItemDelegate {
 
                 PlasmaComponents.Label {
                     Layout.maximumWidth: delegate.width * 0.4
+                    // PlainText on everything that comes from a message: the
+                    // default AutoText renders anything that looks like HTML as
+                    // rich text, so a ping containing <img src="https://…">
+                    // would make the panel fetch a URL chosen by the sender.
+                    textFormat: Text.PlainText
                     text: delegate.ping.authorName
                     font.weight: delegate.ping.read ? Font.Normal : Font.DemiBold
                     elide: Text.ElideRight
@@ -95,6 +100,7 @@ PlasmaComponents.ItemDelegate {
 
             PlasmaComponents.Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: delegate.ping.content || i18n("(no text)")
                 font: Kirigami.Theme.smallFont
                 elide: Text.ElideRight
@@ -105,6 +111,7 @@ PlasmaComponents.ItemDelegate {
 
             PlasmaComponents.Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: delegate.ping.guildId
                     ? delegate.ping.guildName + " · " + delegate.ping.channelName
                     : delegate.ping.channelName
